@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Modern Calculator</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #111;
+        font-family: sans-serif;
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      .calculator {
+        background-color: #1e1e1e;
+        padding: 20px;
+        border-radius: 10px;
+        width: 320px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      }
+
+      /* Das Display ist fokussierbar und hat symmetrisches Padding */
+      .display {
+        position: relative;
+        width: 100%;
+        height: 50px;
+        background: #333;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        padding: 0px;
+        cursor: text;
+      }
+
+      /* Vorschau oben */
+      .preview {
+        font-size: 0.9rem;
+        color: #bbb;
+        line-height: 1;
+        height: 20px;
+        text-align: right;
+      }
+
+      /* Hauptanzeige für den eingegebenen Ausdruck */
+      .mainDisplay {
+        position: relative;
+        font-size: 1.4rem;
+        line-height: 1;
+        text-align: right;
+      }
+
+      /* Der eingegebene Text wird in diesem Span gehalten */
+      #textContent {
+        display: inline-block;
+      }
+
+      /* Der blinkende Cursor */
+      .cursor {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 1.2rem;
+        background-color: #fff;
+        animation: blink 1.5s step-start infinite;
+        pointer-events: none;
+      }
+
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      .buttons {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-gap: 8px;
+      }
+
+      button {
+        background-color: #2d2d2d;
+        border: none;
+        border-radius: 8px;
+        padding: 15px;
+        font-size: 1rem;
+        color: #fff;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      button:hover {
+        background-color: #3a3a3a;
+      }
+
+      .active-mode {
+        background-color: #444;
+      }
+
+      .equals {
+        background-color: #2D2D2D;
+      }
+
+      .equals:hover {
+        background-color: #3a3a3a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="calculator">
+      <!-- Anzeige (Display) mit Vorschau, Hauptanzeige und Cursor -->
+      <div class="display" id="display" tabindex="0">
+        <div class="preview" id="previewText"></div>
+        <div class="mainDisplay" id="mainDisplay">
+          <span id="textContent"></span>
+          <span class="cursor" id="cursor"></span>
+        </div>
+      </div>
+
+      <!-- Tasten-Container -->
+      <div class="buttons">
+        <!-- ROW 1 -->
+        <button id="clear">AC</button>
+        <button id="delete">DEL</button>
+        <button>(</button>
+        <button>)</button>
+
+        <!-- ROW 2 -->
+        <button id="radDeg">Rad</button>
+        <button id="inv">Inv</button>
+        <button id="sin">sin</button>
+        <button id="cos">cos</button>
+
+        <!-- ROW 3 -->
+        <button id="tan">tan</button>
+        <button id="ln">ln</button>
+        <button id="log">log</button>
+        <button id="sqrt">√</button>
+
+        <!-- ROW 4 -->
+        <button id="pow2">x²</button>
+        <button id="powN">x^n</button>
+        <button id="factorial">x!</button>
+        <button id="pi">π</button>
+
+        <!-- ROW 5 -->
+        <button id="e">e</button>
+        <button id="exp">EXP</button>
+        <button id="ans">Ans</button>
+        <button>%</button>
+
+        <!-- ROW 6 (Ziffern/Operatoren) -->
+        <button>7</button>
+        <button>8</button>
+        <button>9</button>
+        <button>/</button>
+
+        <!-- ROW 7 -->
+        <button>4</button>
+        <button>5</button>
+        <button>6</button>
+        <button>*</button>
+
+        <!-- ROW 8 -->
+        <button>1</button>
+        <button>2</button>
+        <button>3</button>
+        <button>-</button>
+
+        <!-- ROW 9 -->
+        <button>0</button>
+        <button>.</button>
+        <button class="equals" id="equals">=</button>
+        <button>+</button>
+      </div>
+    </div>
+
+    <script>
+      // Referenzen auf Display-Bereiche
+      const display = document.getElementById("display");
+      const previewText = document.getElementById("previewText");
+      const mainDisplay = document.getElementById("mainDisplay");
+      const textContent = document.getElementById("textContent");
+      const cursor = document.getElementById("cursor");
+
+      // Zwischenspeicher für Ausdruck und letztes Ergebnis
+      let currentExpression = "";
+      let lastAnswer = 0;
+
+      // Flags für Radiant/Grad und Inverse
+      let isDegMode = true;
+      let isInvMode = false;
+
+      // Hilfsfunktionen
+      function factorial(n) {
+        if (n < 0) return NaN;
+        if (n === 0 || n === 1) return 1;
+        let result = 1;
+        for (let i = 2; i <= n; i++) {
+          result *= i;
+        }
+        return result;
+      }
+
+      function toRadians(deg) {
+        return deg * (Math.PI / 180);
+      }
+
+      function getTrigFunction(name, value) {
+        let val = parseFloat(value);
+        if (isDegMode) {
+          val = toRadians(val);
+        }
+        if (!isInvMode) {
+          switch (name) {
+            case "sin":
+              return Math.sin(val);
+            case "cos":
+              return Math.cos(val);
+            case "tan":
+              return Math.tan(val);
+          }
+        } else {
+          switch (name) {
+            case "sin":
+              return Math.asin(val);
+            case "cos":
+              return Math.acos(val);
+            case "tan":
+              return Math.atan(val);
+          }
+        }
+      }
+
+      function log10(x) {
+        return Math.log(x) / Math.log(10);
+      }
+
+      // Ausdruck auswerten
+      function evaluateExpression(expr) {
+        expr = expr.replace(/Ans/g, `(${lastAnswer})`);
+        expr = expr.replace(/π/g, "Math.PI");
+        expr = expr.replace(/\be\b/g, "Math.E");
+        expr = expr.replace(/(\d+(\.\d+)?)!/g, function (match, number) {
+          return `factorial(${number})`;
+        });
+        expr = expr.replace(/\(([^)]+)\)!/g, function (match, group) {
+          return `factorial((${group}))`;
+        });
+        expr = expr.replace(
+          /(\d+(\.\d+)?|\([^()]+\))\^(\d+(\.\d+)?|\([^()]+\))/g,
+          function (_, base, __, exponent) {
+            return `Math.pow(${base}, ${exponent})`;
+          }
+        );
+        expr = expr.replace(/sqrt\(/g, "Math.sqrt(");
+        expr = expr.replace(/ln\(/g, "Math.log(");
+        expr = expr.replace(/log\(/g, "log10(");
+        expr = expr.replace(
+          /sin\(([^)]+)\)/g,
+          (m, g) => `getTrigFunction("sin","${g}")`
+        );
+        expr = expr.replace(
+          /cos\(([^)]+)\)/g,
+          (m, g) => `getTrigFunction("cos","${g}")`
+        );
+        expr = expr.replace(
+          /tan\(([^)]+)\)/g,
+          (m, g) => `getTrigFunction("tan","${g}")`
+        );
+        expr = expr.replace(
+          /(\d+(\.\d+)?)(EXP)(\d+(\.\d+)?)/g,
+          function (_, base, __, ___, exponent) {
+            return `(${base} * Math.pow(10, ${exponent}))`;
+          }
+        );
+        expr = expr.replace(
+          /(\d+(\.\d+)?)%/g,
+          (_, number) => `(${number}/100)`
+        );
+        return eval(expr);
+      }
+
+      // Aktualisiert den Display-Container:
+      // - Aktualisiert den sichtbaren Text im textContent-Span
+      // - Positioniert den blinkenden Cursor dynamisch direkt neben dem eingegebenen Text
+      function updateDisplay() {
+        textContent.innerText = currentExpression;
+
+        // Berechne dynamisch die Cursor-Position (immer sichtbar)
+        const gap = 2; // Abstand zwischen Text und Cursor
+        const paddingRight = 10; // rechtes Padding des Containers (links und rechts identisch)
+        const containerWidth = mainDisplay.clientWidth;
+        const textWidth = textContent.offsetWidth;
+        const newLeft = containerWidth - paddingRight - textWidth - gap;
+
+        // Zeige den Cursor nur an, wenn der Ausdruck leer ist
+        if (currentExpression.length === 0) {
+            cursor.style.display = "block";
+            cursor.style.left = newLeft + "px";
+        } else {
+            cursor.style.display = "none";
+        }
+
+        // Aktualisiere die Vorschau, sofern ein Operator im Ausdruck vorkommt
+        if (/[\+\-\*\/\^]/.test(currentExpression)) {
+            try {
+                const result = evaluateExpression(currentExpression);
+                previewText.textContent = result;
+            } catch (e) {
+                previewText.textContent = "";
+            }
+        } else {
+            previewText.textContent = "";
+        }
+      }
+
+      // Klick-Events der Buttons
+      document.querySelectorAll(".buttons button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const value = btn.textContent;
+          switch (value) {
+            case "AC":
+              currentExpression = "";
+              previewText.textContent = "";
+              textContent.innerText = "";
+              updateDisplay();
+              break;
+            case "DEL":
+              currentExpression = currentExpression.slice(0, -1);
+              updateDisplay();
+              break;
+            case "=":
+              try {
+                let result = evaluateExpression(currentExpression);
+                if (typeof result === "number") {
+                  lastAnswer = result;
+                }
+                currentExpression = String(result);
+                previewText.textContent = "";
+                updateDisplay();
+              } catch (e) {
+                currentExpression = "";
+                previewText.textContent = "";
+                textContent.innerText = "Error";
+              }
+              break;
+            case "Rad":
+            case "Deg":
+              isDegMode = !isDegMode;
+              btn.textContent = isDegMode ? "Rad" : "Deg";
+              break;
+            case "Inv":
+              isInvMode = !isInvMode;
+              btn.classList.toggle("active-mode");
+              document.getElementById("sin").textContent = isInvMode
+                ? "asin"
+                : "sin";
+              document.getElementById("cos").textContent = isInvMode
+                ? "acos"
+                : "cos";
+              document.getElementById("tan").textContent = isInvMode
+                ? "atan"
+                : "tan";
+              break;
+            default:
+              currentExpression += value;
+              updateDisplay();
+          }
+        });
+      });
+
+      // Keyboard-Unterstützung: Eingabe via Tastatur, Löschen mit Backspace/Entfernen,
+      // Enter zur Auswertung und Escape zum Zurücksetzen
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          document.getElementById("equals").click();
+          return;
+        }
+        if (event.key === "Backspace" || event.key === "Delete") {
+          event.preventDefault();
+          document.getElementById("delete").click();
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          document.getElementById("clear").click();
+          return;
+        }
+        if (event.key.length === 1 && event.key !== " ") {
+          currentExpression += event.key;
+          updateDisplay();
+        }
+      });
+
+      // Bei Klick ins Display erhält dieses den Fokus
+      display.addEventListener("click", () => {
+        display.focus();
+      });
+
+      // Initiales Update
+      updateDisplay();
+    </script>
+  </body>
+</html>
