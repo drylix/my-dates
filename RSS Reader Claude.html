@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR-Code Scanner</title>
+    <title>QR-Code Decoder</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.4/html5-qrcode.min.js"></script>
     <style>
         body {
@@ -16,10 +16,20 @@
         h1 {
             color: #333;
         }
-        #qr-reader {
+        .upload-container {
+            margin: 20px auto;
+            padding: 20px;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
             width: 100%;
             max-width: 500px;
-            margin: 0 auto;
+            text-align: center;
+        }
+        .upload-container:hover {
+            border-color: #4CAF50;
+        }
+        #file-input {
+            display: none;
         }
         #qr-reader-results {
             margin-top: 20px;
@@ -65,16 +75,43 @@
         .button-container {
             margin-top: 15px;
         }
+        #preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 10px;
+            display: none;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #4CAF50;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
-    <h1>QR-Code Scanner</h1>
-    <p>Erlaube den Zugriff auf die Kamera und halte einen QR-Code vor die Kamera.</p>
+    <h1>QR-Code Decoder</h1>
+    <p>Lade ein Bild mit einem QR-Code hoch, um den enthaltenen Link zu extrahieren.</p>
     
-    <div id="qr-reader"></div>
+    <div class="upload-container">
+        <label for="file-input" class="button">QR-Code Bild auswählen</label>
+        <input type="file" id="file-input" accept="image/*">
+        <p>Oder ziehe ein Bild hierher</p>
+        <img id="preview-image" alt="QR-Code Vorschau">
+    </div>
+    
+    <div class="loader" id="loader"></div>
     
     <div id="qr-reader-results">
-        <h2>Gescannter Link:</h2>
+        <h2>Extrahierter Link:</h2>
         <p id="scanned-url"></p>
         <div class="button-container">
             <button id="copy-button" class="button">Link kopieren</button>
@@ -84,56 +121,84 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const html5QrCode = new Html5Qrcode("qr-reader");
+            const fileInput = document.getElementById('file-input');
+            const uploadContainer = document.querySelector('.upload-container');
             const resultsDiv = document.getElementById('qr-reader-results');
             const scannedUrlElement = document.getElementById('scanned-url');
             const copyButton = document.getElementById('copy-button');
             const openButton = document.getElementById('open-button');
+            const previewImage = document.getElementById('preview-image');
+            const loader = document.getElementById('loader');
             
             let lastResult = '';
-            let scanning = false;
 
-            function onScanSuccess(decodedText, decodedResult) {
-                if (decodedText !== lastResult) {
-                    lastResult = decodedText;
-                    
-                    // Zeige das Ergebnis an
-                    scannedUrlElement.textContent = decodedText;
-                    resultsDiv.style.display = 'block';
-                    
-                    // Stoppe den Scan
-                    html5QrCode.stop();
-                    scanning = false;
-                }
-            }
+            // Datei-Input-Event
+            fileInput.addEventListener('change', handleFile);
 
-            // Starte den Scanner
-            function startScanner() {
-                const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            // Drag & Drop Events
+            uploadContainer.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadContainer.style.borderColor = '#4CAF50';
+            });
+
+            uploadContainer.addEventListener('dragleave', function() {
+                uploadContainer.style.borderColor = '#ccc';
+            });
+
+            uploadContainer.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadContainer.style.borderColor = '#ccc';
                 
-                html5QrCode.start(
-                    { facingMode: "environment" }, 
-                    config, 
-                    onScanSuccess
-                ).then(() => {
-                    scanning = true;
-                }).catch(err => {
-                    console.error(`QR-Code Scanner konnte nicht gestartet werden: ${err}`);
-                    alert("Fehler beim Starten des Scanners. Bitte erlaube den Zugriff auf die Kamera.");
-                });
-            }
-
-            // Neu-Scan-Button
-            const rescanButton = document.createElement('button');
-            rescanButton.innerText = 'Neuen QR-Code scannen';
-            rescanButton.className = 'button';
-            rescanButton.addEventListener('click', function() {
-                if (!scanning) {
-                    lastResult = '';
-                    startScanner();
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    handleFile();
                 }
             });
-            document.body.appendChild(rescanButton);
+
+            // Datei verarbeiten
+            function handleFile() {
+                const file = fileInput.files[0];
+                if (!file) return;
+
+                // Zeige Vorschau
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                    previewImage.style.display = 'block';
+                    
+                    // Zeige Ladeanimation
+                    loader.style.display = 'block';
+                    resultsDiv.style.display = 'none';
+                    
+                    // QR-Code scannen
+                    decodeQRCode(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+
+            // QR-Code dekodieren
+            function decodeQRCode(imageUrl) {
+                const html5QrCode = new Html5Qrcode("qr-reader-hidden");
+                
+                html5QrCode.scanFile(fileInput.files[0], true)
+                    .then(decodedText => {
+                        lastResult = decodedText;
+                        
+                        // Verstecke Ladeanimation
+                        loader.style.display = 'none';
+                        
+                        // Zeige das Ergebnis an
+                        scannedUrlElement.textContent = decodedText;
+                        resultsDiv.style.display = 'block';
+                    })
+                    .catch(err => {
+                        // Verstecke Ladeanimation
+                        loader.style.display = 'none';
+                        
+                        console.error("QR-Code konnte nicht gelesen werden:", err);
+                        alert("Konnte keinen QR-Code im Bild finden. Bitte versuche es mit einem anderen Bild.");
+                    });
+            }
 
             // Kopier-Button
             copyButton.addEventListener('click', function() {
@@ -156,8 +221,11 @@
                 }
             });
 
-            // Starte den Scanner beim Laden der Seite
-            startScanner();
+            // Verstecktes Element für QR-Code-Leser
+            const hiddenElement = document.createElement('div');
+            hiddenElement.id = 'qr-reader-hidden';
+            hiddenElement.style.display = 'none';
+            document.body.appendChild(hiddenElement);
         });
     </script>
 </body>
